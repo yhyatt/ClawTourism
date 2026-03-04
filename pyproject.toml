@@ -18,7 +18,8 @@ classifiers = [
 dependencies = [
     "requests>=2.31.0",
     "beautifulsoup4>=4.12.0",
-    "pdfplumber>=0.9.0",
+    # pdfplumber removed — native OpenClaw `pdf` tool used in agent context
+    # pypdf kept as lightweight fallback for non-agent (batch scanner) path
     "pypdf>=3.0.0",
 ]
 
