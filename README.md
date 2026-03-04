@@ -96,18 +96,18 @@ Your agent will parse all `label:Trips` emails, extract flights/hotels/restauran
 <td width="50%">
 
 ### 🧳 Pre-Trip Intelligence
-- **D-14/7/3/1 checklists** — passport check, packing, prescriptions, final
-- **Packing list generator** — weather-aware (Open-Meteo), kids-aware, trip-type aware
-- **Weather forecast** — D-3/D-1 real forecast at destination (Open-Meteo, free)
-- **Visa check** — Israeli passport requirements lookup by destination
+- **Visa check on trip creation** — entry requirements fired the moment a trip is saved, not 2 weeks later
+- **Persistent packing profiles** — each member sets their base template once; it survives every trip. D-7 shows *"your usual"* + *"for this destination specifically"*
+- **Weather forecast** — D-3/D-1 live forecast at destination (Open-Meteo, free, no key)
+- **D-14/7/3/1 consolidated briefings** — one message per checkpoint, not 5 separate alerts
 
 </td>
 <td width="50%">
 
 ### 🚕 Logistics
-- **Transfer suggestions** — airport/pier → hotel when both are known
+- **Transfer suggestions** — airport/pier → hotel when both are known (TLV, EWR, JFK, BCN, Piraeus)
 - **Restaurant release-day alerts** — Resy 28-day, OpenTable 30-day rules
-- **Currency prep** — ILS→destination FX rate D-7 (frankfurter.app, free)
+- **Currency prep** — ILS→destination FX rate at D-7 (frankfurter.app, free)
 - **All opt-out** — each group member controls their own notification preferences
 
 </td>
@@ -173,13 +173,14 @@ memory/trips/{slug}.md      ← human readable
 
 ### Pre-Trip Timeline
 
-| When | Alert |
-|------|-------|
-| **D-14** | Passport check, insurance, restaurant gaps, "want a packing list?" |
-| **D-7** | Packing list (weather + kids aware), prescriptions, currency rate |
-| **D-3** | Docs offline, luggage weight, car to airport, weather forecast |
-| **D-1** | Final checklist, flight details, "I'll track gate + status tomorrow" |
-| **Day-of** | Gate assigned, delays, boarding — every 45 min until departure |
+| When | What fires |
+|------|-----------|
+| **On save** | 🛂 Visa check — entry requirements for all destination countries, immediately |
+| **D-14** | Passport expiry reminder, insurance, cruise check-in, restaurant gaps |
+| **D-7** | 🧳 Packing briefing — *your saved template* + trip-specific additions (weather, kids, cruise). Currency rate. |
+| **D-3** | 🌤️ 5-day weather forecast + logistics checklist (docs offline, luggage, car to airport) |
+| **D-1** | ✈️ Flight details + weather + transfer options (airport → hotel). Flight tracking starts tomorrow. |
+| **Day-of** | Gate assigned, delays >15min, boarding, cancellations — every 45 min until departure |
 
 ### Restaurant Release-Day Alerts (e.g. NYC)
 
@@ -228,21 +229,23 @@ memory/trips/{slug}.md      ← human readable
 
 ```
 clawtourism/
-├── scanner.py        Gmail label:Trips scanning via gog
-├── extractor.py      Regex booking extraction (flights, hotels, cruise, restaurants)
-├── pdf_extractor.py  PDF ticket/voucher parsing (pdfplumber + pypdf)
-├── assembler.py      Groups emails into Trip objects
-├── gap_detector.py   Missing items: return flight, accommodation, docs, kids
-├── renderer.py       Markdown + JSON trip summaries
-├── store.py          File persistence → memory/trips/
-├── pre_trip.py       D-14/7/3/1 checklist cron specs
-├── flight_monitor.py D-1 alert + day-of polling crons (AeroDataBox)
-├── resy_alerts.py    Restaurant release-day alert crons
-├── weather.py        Open-Meteo forecast for destination        [coming]
-├── packing.py        Weather + kids + trip-type packing lists   [coming]
-├── day_planner.py    Morning/afternoon/evening day plans        [coming]
-├── transfers.py      Airport/pier → hotel suggestions           [coming]
-└── visa_check.py     Israeli passport destination requirements  [coming]
+├── scanner.py          Gmail label:Trips scanning via gog
+├── extractor.py        Regex booking extraction (flights, hotels, cruise, restaurants)
+├── pdf_extractor.py    PDF ticket/voucher parsing (pdfplumber + pypdf)
+├── assembler.py        Groups emails into Trip objects
+├── gap_detector.py     Missing items: return flight, accommodation, docs, kids
+├── renderer.py         Markdown + JSON trip summaries
+├── store.py            File persistence → memory/trips/ (fires visa check on new trips)
+├── briefing.py         Consolidated checkpoint briefings — assembles live data at fire time
+├── pre_trip.py         D-14/7/3/1 agentTurn cron specs → calls briefing.py
+├── flight_monitor.py   D-1 alert + day-of polling crons (AeroDataBox)
+├── resy_alerts.py      Restaurant release-day alert crons
+├── weather.py          Open-Meteo forecast (free, no key)
+├── packing.py          Weather + kids + trip-type packing lists
+├── packing_profile.py  Persistent per-member packing templates
+├── day_planner.py      Morning/afternoon/evening day plans (TLV, BCN, NYC + cruise ports)
+├── transfers.py        Airport/pier → hotel (TLV, EWR, JFK, BCN, Piraeus)
+└── visa_check.py       Israeli passport requirements, 35+ countries
 ```
 
 ### Known Booking Sources
