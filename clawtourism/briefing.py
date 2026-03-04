@@ -15,7 +15,7 @@ import os
 
 from clawtourism.models import Trip
 from clawtourism.store import TripStore
-from clawtourism import weather, packing, visa_check, transfers
+from clawtourism import weather, packing, visa_check, transfers, packing_profile
 
 TRIPS_DIR = Path(os.environ.get("CLAWTOURISM_TRIPS_DIR",
     Path(__file__).parent.parent.parent.parent / "memory" / "trips"))
@@ -74,12 +74,7 @@ def generate_d14(trip_id: str) -> str:
 
     sections = [f"🧳 *{dest} in 2 weeks!*\n"]
 
-    # Visa check — once, at D-14
-    visa_reqs = visa_check.check_trip_destinations(cities)
-    if visa_reqs:
-        sections.append(visa_check.format_visa_block(visa_reqs))
-
-    # Static checklist
+    # Static checklist (visa was already sent at trip creation)
     checklist = [
         "• Book any restaurants not yet reserved",
         "• Check passport expiry" + (" — Zoe + Lenny passports too" if has_kids else ""),
@@ -108,19 +103,12 @@ def generate_d7(trip_id: str) -> str:
 
     sections = [f"✈️ *{dest} in 1 week*\n"]
 
-    # Packing list — generated fresh
+    # Packing — use member profile if available, otherwise full generated list
     try:
         start = date.fromisoformat(start_str)
         forecasts = weather.get_forecast(dest, start, days=7) if dest else []
-        # Detect cruise formal dinner nights
         formal_nights = 2 if cruise else 0
-        nights = trip.get("nights") or (
-            (date.fromisoformat(trip["end_date"]) - date.fromisoformat(start_str)).days
-            if "end_date" in trip else 7
-        )
-        # Build a minimal Trip-like object for packing
-        from clawtourism.models import Trip as TripModel, TripStatus
-        from datetime import datetime
+        from clawtourism.models import Trip as TripModel
         mock_trip = TripModel(
             trip_id=trip_id,
             destination=dest,
@@ -135,11 +123,15 @@ def generate_d7(trip_id: str) -> str:
             is_cruise=cruise,
             formal_dinner_nights=formal_nights,
         )
-        sections.append(pack.format())
-    except Exception as e:
+        # Use packing profile if member has one (default: yonatan for family trips)
+        profile = packing_profile.get_profile("yonatan")
+        sections.append(
+            packing_profile.format_briefing(profile, pack.categories, dest)
+        )
+    except Exception:
         sections.append(
             "*Packing reminder:*\n• Documents, clothes, electronics, meds"
-            + (" kids items" if has_kids else "")
+            + (" + kids items" if has_kids else "")
         )
 
     # FX rate reminder

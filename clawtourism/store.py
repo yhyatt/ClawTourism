@@ -1,10 +1,17 @@
-"""TripStore — saves and loads trips from memory/travel/ directory."""
+"""TripStore — saves and loads trips from memory/travel/ directory.
+
+On save, fires visa_check immediately so the user knows entry requirements
+as soon as the trip is created — not at D-14 when it may be too late.
+"""
 
 import json
+import logging
 from dataclasses import asdict
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
+
+log = logging.getLogger(__name__)
 
 from clawtourism.models import (
     CruiseBooking,
@@ -36,14 +43,6 @@ class TripStore:
         filepath.write_text(content, encoding="utf-8")
         return filepath
 
-    def save_trip_json(self, trip: Trip) -> Path:
-        """Save trip as JSON for machine consumption."""
-        filename = f"{trip.trip_id}.json"
-        filepath = self.base_dir / filename
-        data = self._trip_to_dict(trip)
-        filepath.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
-        return filepath
-
     def load_trip_json(self, trip_id: str) -> Trip | None:
         """Load trip from JSON file."""
         filepath = self.base_dir / f"{trip_id}.json"
@@ -59,12 +58,42 @@ class TripStore:
         ]
 
     def save_all(self, trips: list[Trip]) -> list[Path]:
-        """Save all trips as both markdown and JSON."""
+        """Save all trips as both markdown and JSON. Fires visa check on new trips."""
         paths = []
         for trip in trips:
+            is_new = not (self.base_dir / f"{trip.trip_id}.json").exists()
             paths.append(self.save_trip_markdown(trip))
             paths.append(self.save_trip_json(trip))
+            if is_new:
+                self._fire_visa_check(trip)
         return paths
+
+    def save_trip_json(self, trip: Trip) -> Path:
+        """Save trip as JSON. Fires visa check if trip is new."""
+        is_new = not (self.base_dir / f"{trip.trip_id}.json").exists()
+        filename = f"{trip.trip_id}.json"
+        filepath = self.base_dir / filename
+        data = self._trip_to_dict(trip)
+        filepath.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+        if is_new:
+            self._fire_visa_check(trip)
+        return filepath
+
+    def _fire_visa_check(self, trip: Trip):
+        """Immediately check visa requirements when a new trip is saved."""
+        try:
+            from clawtourism import visa_check
+            cities = [trip.destination]
+            if trip.cruise:
+                cities.extend(trip.cruise.itinerary)
+            reqs = visa_check.check_trip_destinations(cities)
+            if reqs:
+                block = visa_check.format_visa_block(reqs)
+                header = f"🛂 *New trip saved: {trip.destination}*\n"
+                print(header + block)   # agent captures stdout and sends to Telegram
+                log.info("Visa check fired for trip %s", trip.trip_id)
+        except Exception as e:
+            log.warning("Visa check failed for %s: %s", trip.trip_id, e)
 
     def _trip_to_dict(self, trip: Trip) -> dict[str, Any]:
         """Convert trip to dictionary for JSON serialization."""
