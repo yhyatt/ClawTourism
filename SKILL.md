@@ -16,6 +16,24 @@ Travel intelligence skill for OpenClaw agents.
 3. (Optional) Set `AERODATABOX_API_KEY` for live flight monitoring
 4. Run: `python -m clawtourism scan`
 
+## Flight Status CLI (token-free, no API key)
+
+```bash
+# clawtourism is not pip-installed — always set PYTHONPATH:
+SKILLS=/home/openclaw/.openclaw/workspace/skills/clawtourism
+
+# One-shot status check
+PYTHONPATH=$SKILLS python3 -m clawtourism flight-status W43048
+PYTHONPATH=$SKILLS python3 -m clawtourism flight-status W43048 --date 2026-03-27
+
+# Stateful monitor — prints ONLY on change (departure, landing, delay ≥15m)
+# Designed for cron use in group agents
+PYTHONPATH=$SKILLS python3 -m clawtourism flight-monitor W43048 --state-file /tmp/w43048_state.json
+```
+
+Output is WhatsApp-ready Hebrew text. Uses FlightRadar24 (no key needed).
+Group agents: use `flight-monitor` in your cron, wire output directly to the group.
+
 ## Usage
 
 Ask your agent:
