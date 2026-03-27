@@ -25,6 +25,11 @@ def main():
         _airbnb_cmd(sys.argv[2:])
         return
 
+    # Google Places
+    if cmd == "places":
+        _places_cmd(sys.argv[2:])
+        return
+
     _print_help()
     sys.exit(1)
 
@@ -39,6 +44,9 @@ def _print_help():
     print("  accommodation details --hotel-id ID --checkin YYYY-MM-DD --checkout YYYY-MM-DD")
     print("  airbnb search --location LOCATION --checkin YYYY-MM-DD --checkout YYYY-MM-DD")
     print("                [--adults N] [--children N] [--min-bedrooms N] [--top N]")
+    print("  places restaurants --location CITY/NEIGHBORHOOD [--radius M] [--top N]")
+    print("  places attractions --location CITY [--radius M] [--family] [--top N]")
+    print("  places search --location CITY --type PLACE_TYPE [--top N]")
 
 
 def _accommodation_cmd(args: list[str]):
@@ -96,6 +104,37 @@ def _accommodation_cmd(args: list[str]):
         for r in reviews:
             print(f"  [{r['score']}] {r['title']}")
             if r['pros']: print(f"  + {r['pros'][:150]}")
+
+
+def _places_cmd(args: list[str]):
+    import argparse
+    parser = argparse.ArgumentParser(prog="clawtourism places")
+    sub = parser.add_subparsers(dest="action")
+
+    for action in ("restaurants", "attractions", "search"):
+        s = sub.add_parser(action)
+        s.add_argument("--location", "--city", required=True, dest="location")
+        s.add_argument("--radius", type=int, default=1500)
+        s.add_argument("--min-rating", type=float, default=4.3)
+        s.add_argument("--top", type=int, default=8)
+        if action == "attractions":
+            s.add_argument("--family", action="store_true", help="Include kid-friendly types (zoo, aquarium, etc.)")
+        if action == "search":
+            s.add_argument("--type", required=True, help="Google place type (e.g. cafe, bar, museum)")
+
+    ns = parser.parse_args(args)
+    from clawtourism.places import search_restaurants, search_attractions, search_places, format_report
+
+    if ns.action == "restaurants":
+        places = search_restaurants(ns.location, ns.radius, ns.min_rating, ns.top)
+        print(format_report(places, f"🍽️ Restaurants near {ns.location}"))
+    elif ns.action == "attractions":
+        places = search_attractions(ns.location, ns.radius, ns.min_rating, ns.top,
+                                    family_types=getattr(ns, "family", False))
+        print(format_report(places, f"🏛️ Attractions near {ns.location}"))
+    elif ns.action == "search":
+        places = search_places(ns.location, [ns.type], ns.radius, ns.min_rating, 50, ns.top)
+        print(format_report(places, f"📍 {ns.type.title()} near {ns.location}"))
 
 
 def _airbnb_cmd(args: list[str]):
