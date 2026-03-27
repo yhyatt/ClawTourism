@@ -71,6 +71,9 @@ def get_checklist_cron_specs(trip: dict) -> list[dict]:
                 "kind": "cron",
                 "expr": f"0 9 {alert_date.day} {alert_date.month} *",
                 "tz": "Asia/Jerusalem",
+                # One-shot: delete cron after it fires once (year is fixed via expires_at)
+                "run_once": True,
+                "expires_at": alert_date.strftime("%Y-%m-%dT09:30:00"),
             },
             "sessionTarget": "isolated",
             "payload": {
