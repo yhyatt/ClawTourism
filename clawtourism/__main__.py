@@ -30,6 +30,11 @@ def main():
         _places_cmd(sys.argv[2:])
         return
 
+    # Flight search (prices/availability)
+    if cmd == "flights":
+        _flights_cmd(sys.argv[2:])
+        return
+
     _print_help()
     sys.exit(1)
 
@@ -47,6 +52,8 @@ def _print_help():
     print("  places restaurants --location CITY/NEIGHBORHOOD [--radius M] [--top N]")
     print("  places attractions --location CITY [--radius M] [--family] [--top N]")
     print("  places search --location CITY --type PLACE_TYPE [--top N]")
+    print("  flights search --from OTP --to VIE --date 2026-04-03 [--adults N] [--children N] [--direct]")
+    print("                 (city names also accepted: --from bucharest --to vienna)")
 
 
 def _accommodation_cmd(args: list[str]):
@@ -167,6 +174,37 @@ def _airbnb_cmd(args: list[str]):
             min_rating=ns.min_rating,
         )
         print(result)
+
+
+def _flights_cmd(args: list[str]):
+    import argparse
+    parser = argparse.ArgumentParser(prog="clawtourism flights")
+    sub = parser.add_subparsers(dest="action")
+
+    s = sub.add_parser("search")
+    s.add_argument("--from", required=True, dest="from_code", help="Origin IATA code or city name")
+    s.add_argument("--to", required=True, dest="to_code", help="Destination IATA code or city name")
+    s.add_argument("--date", required=True, help="Departure date YYYY-MM-DD")
+    s.add_argument("--adults", type=int, default=2)
+    s.add_argument("--children", type=int, default=0)
+    s.add_argument("--direct", action="store_true", help="Direct flights only")
+    s.add_argument("--top", type=int, default=8)
+
+    ns = parser.parse_args(args)
+
+    if ns.action == "search":
+        from clawtourism.flights import search_flights_report
+        result = search_flights_report(
+            from_iata=ns.from_code,
+            to_iata=ns.to_code,
+            depart_date=ns.date,
+            adults=ns.adults,
+            children=ns.children,
+            direct_only=ns.direct,
+        )
+        print(result)
+    else:
+        parser.print_help()
 
 
 if __name__ == "__main__":
