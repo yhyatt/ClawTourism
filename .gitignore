@@ -9,3 +9,11 @@ venv/
 *.log
 .DS_Store
 .mypy_cache/
+
+# Secrets
+*.key
+*.token
+*-key.txt
+*-pat.txt
+.env
+secrets.json
