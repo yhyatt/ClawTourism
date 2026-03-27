@@ -15,9 +15,14 @@ def main():
         flight_main(sys.argv[1:])
         return
 
-    # Accommodation search
+    # Booking.com accommodation search
     if cmd == "accommodation":
         _accommodation_cmd(sys.argv[2:])
+        return
+
+    # Airbnb search via Apify
+    if cmd == "airbnb":
+        _airbnb_cmd(sys.argv[2:])
         return
 
     _print_help()
@@ -32,6 +37,8 @@ def _print_help():
     print("  accommodation search --city CITY [--district D] --checkin YYYY-MM-DD --checkout YYYY-MM-DD")
     print("                       [--adults N] [--children-ages A A ...] [--min-rating F] [--top N]")
     print("  accommodation details --hotel-id ID --checkin YYYY-MM-DD --checkout YYYY-MM-DD")
+    print("  airbnb search --location LOCATION --checkin YYYY-MM-DD --checkout YYYY-MM-DD")
+    print("                [--adults N] [--children N] [--min-bedrooms N] [--top N]")
 
 
 def _accommodation_cmd(args: list[str]):
@@ -89,6 +96,38 @@ def _accommodation_cmd(args: list[str]):
         for r in reviews:
             print(f"  [{r['score']}] {r['title']}")
             if r['pros']: print(f"  + {r['pros'][:150]}")
+
+
+def _airbnb_cmd(args: list[str]):
+    import argparse
+    parser = argparse.ArgumentParser(prog="clawtourism airbnb")
+    sub = parser.add_subparsers(dest="action")
+
+    s = sub.add_parser("search")
+    s.add_argument("--location", required=True)
+    s.add_argument("--checkin", required=True)
+    s.add_argument("--checkout", required=True)
+    s.add_argument("--adults", type=int, default=2)
+    s.add_argument("--children", type=int, default=0)
+    s.add_argument("--min-bedrooms", type=int, default=1)
+    s.add_argument("--top", type=int, default=8)
+    s.add_argument("--min-rating", type=float, default=4.5)
+
+    ns = parser.parse_args(args)
+
+    if ns.action == "search":
+        from clawtourism.airbnb import search_and_report
+        result = search_and_report(
+            location=ns.location,
+            checkin=ns.checkin,
+            checkout=ns.checkout,
+            adults=ns.adults,
+            children=ns.children,
+            min_bedrooms=ns.min_bedrooms,
+            top_n=ns.top,
+            min_rating=ns.min_rating,
+        )
+        print(result)
 
 
 if __name__ == "__main__":
