@@ -16,6 +16,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://github.com/yhyatt/ClawTourism)
 [![OpenClaw Skill](https://img.shields.io/badge/OpenClaw-Skill-red)](https://clawhub.ai/skills/clawtourism)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue)](CHANGELOG.md)
 [![Tests](https://img.shields.io/badge/tests-146%20passing-brightgreen)](https://github.com/yhyatt/ClawTourism)
 
 </div>
@@ -35,23 +36,23 @@
 
 ### Free — No API Key Required
 
-| Module | What it does | Source |
-|--------|-------------|--------|
-| **`currency`** | Exchange rates, conversions, historical data | Frankfurter (central bank data) |
-| **`destination`** | Country facts + full travel guide (See/Do/Eat/Sleep/Get in) | RestCountries + Wikivoyage |
-| **`weather`** | 7–14 day forecast, temp, rain, wind | Open-Meteo |
-| **`visa_check`** | Entry requirements for Israeli passport, 35+ countries | Built-in lookup table |
-| **`flight-status`** | Live flight status, delays, gate, arrival | FlightRadar24 (unofficial) |
-| **`flight-monitor`** | Stateful cron monitor — fires only on changes | FlightRadar24 (unofficial) |
+| Module | What it does | Added | Source |
+|--------|-------------|-------|--------|
+| **`currency`** | Exchange rates, conversions, historical data | Mar 28 | Frankfurter (central bank data) |
+| **`destination`** | Country facts + full travel guide (See/Do/Eat/Sleep/Get in) | Mar 28 | RestCountries + Wikivoyage |
+| **`weather`** | 7–14 day forecast, temp, rain, wind | Mar 27 | Open-Meteo |
+| **`visa_check`** | Entry requirements for Israeli passport, 35+ countries | Mar 27 | Built-in lookup table |
+| **`flight-status`** | Live flight status, delays, gate, arrival | Mar 03 | FlightRadar24 (unofficial) |
+| **`flight-monitor`** | Stateful cron monitor — fires only on changes | Mar 03 | FlightRadar24 (unofficial) |
 
 ### Requires API Key
 
-| Module | What it does | Key |
-|--------|-------------|-----|
-| **`places`** | Restaurants, attractions, POIs near a location | Google Places API |
-| **`accommodation`** | Hotel search with ratings, prices, reviews | Booking.com RapidAPI |
-| **`airbnb`** | Apartment/house search | Apify |
-| **`flights`** | Flight price search, schedules | Booking.com RapidAPI |
+| Module | What it does | Added | Key |
+|--------|-------------|-------|-----|
+| **`places`** | Restaurants, attractions, POIs near a location | Mar 27 | Google Places API |
+| **`accommodation`** | Hotel search with ratings, prices, reviews | Mar 27 | Booking.com RapidAPI |
+| **`airbnb`** | Apartment/house search | Mar 27 | Apify |
+| **`flights`** | Flight price search, schedules | Mar 27 | Booking.com RapidAPI |
 
 ---
 
