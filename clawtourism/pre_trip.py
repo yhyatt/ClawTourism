@@ -54,9 +54,31 @@ def get_checklist_cron_specs(trip: dict) -> list[dict]:
         if alert_date.date() <= date.today():
             continue  # Already past — skip
 
+        destination = trip.get("destination", "")
+        country = trip.get("country", destination)
+        checkin = trip.get("start_date", "")
+        checkout = trip.get("end_date", "")
+
+        # At D-7: run thorough integration tests before the briefing
+        integration_test_block = ""
+        if days_before == 7:
+            integration_test_block = (
+                f"First, run the thorough pre-trip integration tests for this destination:\n\n"
+                f"```bash\n"
+                f"bash /home/openclaw/.openclaw/workspace/scripts/test-live-thorough.sh"
+                f" --destination \"{destination}\""
+                f" --country \"{country}\""
+                f" --checkin {checkin}"
+                f" --checkout {checkout}\n"
+                f"```\n\n"
+                f"If any tests FAILED (not just warned), send a separate Telegram alert first:\n"
+                f"'⚠️ Pre-trip stack check: [N] integrations broken for {destination} trip — fix before departure. See /tmp/live-test-thorough-YYYY-MM-DD.txt'\n\n"
+            )
+
         payload = (
             f"[ClawTourism pre-trip D-{days_before}] {intro}.\n\n"
-            f"Run the following Python and send the output to Yonatan on Telegram:\n\n"
+            + integration_test_block +
+            f"Then run the following Python and send the output to Yonatan on Telegram:\n\n"
             f"```python\n"
             f"from clawtourism.briefing import generate\n"
             f"print(generate('{trip_id}', {days_before}))\n"
