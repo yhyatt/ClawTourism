@@ -35,6 +35,12 @@ def main():
         _flights_cmd(sys.argv[2:])
         return
 
+    # Foursquare places (restaurants, bars, cafes, search, details)
+    if cmd == "foursquare":
+        from clawtourism.foursquare import main as foursquare_main
+        foursquare_main(sys.argv[2:])
+        return
+
     # Currency exchange rates
     if cmd == "currency":
         from clawtourism.currency import main as currency_main
