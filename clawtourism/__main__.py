@@ -35,6 +35,18 @@ def main():
         _flights_cmd(sys.argv[2:])
         return
 
+    # Currency exchange rates
+    if cmd == "currency":
+        from clawtourism.currency import main as currency_main
+        currency_main(sys.argv[2:])
+        return
+
+    # Destination intelligence (country facts + travel guide)
+    if cmd == "destination":
+        from clawtourism.destination import main as destination_main
+        destination_main(sys.argv[2:])
+        return
+
     _print_help()
     sys.exit(1)
 
@@ -54,6 +66,12 @@ def _print_help():
     print("  places search --location CITY --type PLACE_TYPE [--top N]")
     print("  flights search --from OTP --to VIE --date 2026-04-03 [--adults N] [--children N] [--direct]")
     print("                 (city names also accepted: --from bucharest --to vienna)")
+    print("  currency convert <amount> <FROM> <TO[,TO2,...]>")
+    print("  currency rates <BASE>")
+    print("  currency historical <YYYY-MM-DD> <FROM> <TO[,TO2,...]>")
+    print("  destination info <destination> [--country <country>]")
+    print("  destination country <country>")
+    print("  destination guide <destination>")
 
 
 def _accommodation_cmd(args: list[str]):
