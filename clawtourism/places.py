@@ -24,6 +24,23 @@ Limitations:
     - Radius-based (lat/lon center required internally; city names resolved via geocoding)
     - Results are Google's popularity ranking, not curated
     - No availability/reservation data (use accommodation.py for that)
+
+IMPORTANT — Output schema (uses Google Places API New, NOT the old API):
+    Each returned dict has these EXACT keys (do NOT use old API names):
+    {
+        "name":     str,   # display name  (NOT "displayName" or old "name" dict)
+        "rating":   float, # e.g. 4.7      (same as old API)
+        "reviews":  int,   # review count  (NOT "user_ratings_total" or "userRatingCount")
+        "address":  str,   # formatted     (NOT "vicinity" or "formatted_address")
+        "type":     str,   # primary type  (NOT "types" list)
+        "price":    str,   # "€" / "€€" / "" etc.
+        "summary":  str,   # editorial summary
+        "maps_url": str,   # Google Maps URL with cid= (NOT "place_id")
+        "website":  str,   # website URI
+        "open_now": bool | None,
+    }
+    Wrong fields to avoid: place_id, user_ratings_total, userRatingCount,
+                           vicinity, formatted_address, displayName, types[]
 """
 
 from __future__ import annotations
