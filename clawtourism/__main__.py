@@ -35,6 +35,12 @@ def main():
         _flights_cmd(sys.argv[2:])
         return
 
+    # Bookable experience links (GYG, Viator, Klook, Airbnb, Musement)
+    if cmd == "experiences":
+        from clawtourism.experiences import main as experiences_main
+        experiences_main(sys.argv[2:])
+        return
+
     # Foursquare places (restaurants, bars, cafes, search, details)
     if cmd == "foursquare":
         from clawtourism.foursquare import main as foursquare_main
@@ -72,6 +78,7 @@ def _print_help():
     print("  places search --location CITY --type PLACE_TYPE [--top N]")
     print("  flights search --from OTP --to VIE --date 2026-04-03 [--adults N] [--children N] [--direct]")
     print("                 (city names also accepted: --from bucharest --to vienna)")
+    print("  experiences <city> [--category food|outdoor|museum|nightlife|adventure|family] [--kids]")
     print("  currency convert <amount> <FROM> <TO[,TO2,...]>")
     print("  currency rates <BASE>")
     print("  currency historical <YYYY-MM-DD> <FROM> <TO[,TO2,...]>")

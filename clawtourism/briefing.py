@@ -154,6 +154,14 @@ def generate_d7(trip_id: str) -> str:
         extra.append("• Kids snacks + entertainment for flights?")
     sections.append("\n".join(extra))
 
+    # Experience booking links
+    try:
+        from clawtourism.experiences import get_experience_links, format_experience_links
+        exp_links = get_experience_links(dest, kids=has_kids)
+        sections.append(format_experience_links(dest, exp_links, kids=has_kids))
+    except Exception:
+        pass
+
     return "\n\n".join(s for s in sections if s)
 
 
@@ -190,6 +198,22 @@ def generate_d3(trip_id: str) -> str:
         checklist.append("• Stroller at door? (Lenny)")
         checklist.append("• Kids' car seats arranged?")
     sections.append("*Checklist:*\n" + "\n".join(checklist))
+
+    # Quick-book reminder (D-3 is last practical moment for pre-booking)
+    try:
+        from clawtourism.experiences import get_experience_links
+        exp_links = get_experience_links(dest, kids=has_kids)
+        if exp_links:
+            gyg = exp_links.get("getyourguide", "")
+            viator = exp_links.get("viator", "")
+            reminder = f"🎯 *Pre-book experiences* (last chance before departure)\n"
+            if gyg:
+                reminder += f"🌍 GetYourGuide → {gyg}\n"
+            if viator:
+                reminder += f"🗺️ Viator → {viator}"
+            sections.append(reminder.strip())
+    except Exception:
+        pass
 
     return "\n\n".join(s for s in sections if s)
 
