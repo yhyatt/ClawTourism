@@ -7,6 +7,7 @@ spending tokens on web search / scraping trial-and-error.
 Usage:
     python -m clawtourism flight-status <FLIGHT_NUMBER> [--date YYYY-MM-DD]
     python -m clawtourism flight-monitor <FLIGHT_NUMBER> --state-file <PATH>
+                                          [--date YYYY-MM-DD] [--expires YYYY-MM-DD]
 
 flight-status:
     Prints current status, departure, arrival, delay.
@@ -17,10 +18,22 @@ flight-monitor:
     State stored in --state-file (JSON). Designed for group agent crons.
     Prints a WhatsApp-ready message if something changed, nothing otherwise.
 
+    IMPORTANT — always pass --date and --expires when creating crons:
+    - --date YYYY-MM-DD   The actual flight date. Without this, the monitor
+                          defaults to today and will track a different flight
+                          (same number, next day) after the original lands.
+    - --expires YYYY-MM-DD  Hard expiry: if today > expiry, exits silently.
+                            Set to flight_date + 1 day. This is the safety net
+                            that prevents zombie crons from running forever.
+
+    The monitor also self-exits if the state file shows the flight already
+    landed (arr_real_ts set), regardless of --expires.
+
 Examples:
     python -m clawtourism flight-status W43048
     python -m clawtourism flight-status W43048 --date 2026-03-27
-    python -m clawtourism flight-monitor W43048 --state-file /tmp/w43048.json
+    python -m clawtourism flight-monitor W43048 --state-file /tmp/w43048.json \\
+        --date 2026-03-27 --expires 2026-03-28
 """
 
 import json
@@ -166,7 +179,36 @@ def cmd_status(flight_number: str, date_str: str):
     print(f"   Arrival:   {arr_str}")
 
 
-def cmd_monitor(flight_number: str, date_str: str, state_file: str):
+def cmd_monitor(flight_number: str, date_str: str, state_file: str, expires_str: Optional[str] = None):
+    """
+    Stateful flight monitor. Only outputs when something noteworthy changes.
+
+    Exits silently (no output) when:
+    - Today is past --expires date (zombie-cron guard)
+    - State file shows flight already landed (arr_real_ts set)
+    - No flight found for the given date
+    - FR24 fetch fails
+    """
+    today = datetime.utcnow().date()
+
+    # ── Expiry guard: if today > expires, this flight is history ─────────────
+    if expires_str:
+        try:
+            exp_date = datetime.strptime(expires_str, "%Y-%m-%d").date()
+            if today > exp_date:
+                sys.exit(0)
+        except ValueError:
+            pass  # bad format → ignore, continue
+
+    # ── Already-landed guard: if state shows arr_real_ts, we're done ─────────
+    try:
+        with open(state_file) as fh:
+            saved = json.load(fh)
+        if saved.get("arr_real_ts"):
+            sys.exit(0)
+    except Exception:
+        saved = {}
+
     try:
         flights = fetch_fr24(flight_number)
     except Exception:
@@ -178,13 +220,8 @@ def cmd_monitor(flight_number: str, date_str: str, state_file: str):
 
     info = parse_flight(flight_number, f)
 
-    # Load previous state
-    state = {}
-    try:
-        with open(state_file) as fh:
-            state = json.load(fh)
-    except Exception:
-        pass
+    # Use state already loaded above (or empty dict if file didn't exist)
+    state = saved
 
     prev_status = state.get("status", "").lower()
     prev_dep_real = state.get("dep_real_ts")
@@ -238,7 +275,13 @@ def main(argv=None):
 
     p_monitor = sub.add_parser("flight-monitor", help="Stateful monitor (prints only on change)")
     p_monitor.add_argument("flight_number")
-    p_monitor.add_argument("--date", default=datetime.utcnow().strftime("%Y-%m-%d"))
+    p_monitor.add_argument("--date", default=datetime.utcnow().strftime("%Y-%m-%d"),
+                           help="Flight departure date YYYY-MM-DD (REQUIRED in practice — "
+                                "omitting defaults to today, which tracks the wrong flight "
+                                "after the original has landed)")
+    p_monitor.add_argument("--expires", default=None,
+                           help="Hard expiry date YYYY-MM-DD (set to flight_date + 1). "
+                                "After this date the monitor exits silently — zombie-cron guard.")
     p_monitor.add_argument("--state-file", required=True)
 
     args = parser.parse_args(argv)
@@ -246,7 +289,7 @@ def main(argv=None):
     if args.cmd == "flight-status":
         cmd_status(args.flight_number, args.date)
     elif args.cmd == "flight-monitor":
-        cmd_monitor(args.flight_number, args.date, args.state_file)
+        cmd_monitor(args.flight_number, args.date, args.state_file, args.expires)
     else:
         parser.print_help()
         sys.exit(1)

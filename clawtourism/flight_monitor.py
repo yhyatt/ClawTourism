@@ -201,6 +201,9 @@ def get_cron_specs(flight: dict) -> list[dict]:
                 f"Use flight_monitor.fetch_flight_status('{fn}', '{dep_date}'). "
                 f"Only message if something changed since last check. If nothing new, reply HEARTBEAT_OK."
             ),
+            # NOTE: if converting this to a flight-monitor CLI cron, always pass:
+            # --date {dep_date} --expires {expiry_date}
+            # See flight_status_cli.py for the zombie-cron guard details.
         },
     ]
     return specs
