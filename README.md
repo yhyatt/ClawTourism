@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://github.com/yhyatt/ClawTourism)
-[![OpenClaw Skill](https://img.shields.io/badge/OpenClaw-Skill-red)](https://clawhub.ai/skills/clawtourism)
+[![OpenClaw Skill](https://img.shields.io/badge/OpenClaw-Skill-red)](https://github.com/yhyatt/clawtourism)
 [![Version](https://img.shields.io/badge/version-0.3.0-blue)](CHANGELOG.md)
 [![Tests](https://img.shields.io/badge/tests-146%20passing-brightgreen)](https://github.com/yhyatt/ClawTourism)
 
@@ -165,7 +165,7 @@ ct checklists    # sets up D-14/7/3/1 briefing crons
 | `~/.openclaw/google-places-key.txt` | [Google Cloud Console](https://console.cloud.google.com) | `places` module (5K req/month free) |
 | `RAPIDAPI_KEY` (env/keyring) | [RapidAPI](https://rapidapi.com) | `accommodation`, `flights` (Booking.com) |
 | Apify token (keyring) | [Apify Console](https://apify.com) | `airbnb` module |
-| `GOG_KEYRING_PASSWORD` | [gog skill](https://clawhub.ai/skills/gog) | Gmail scanning (`scan` command) |
+| `GOG_KEYRING_PASSWORD` | [gog skill](https://github.com/yhyatt/gclaw) | Gmail scanning (`scan` command) |
 
 **No key needed:** `currency`, `destination`, `weather`, `visa_check`, `flight-status`, `flight-monitor`
 
@@ -271,9 +271,9 @@ Crons: `weekly-skill-tests` + `weekly-live-smoke-tests` fire every Monday 9:00 A
 
 ## 🤝 Works With
 
-- 🎉 [ClawEvents](https://clawhub.ai/skills/clawevents) — event discovery for your destination
-- 🍽️ [ClawCierge](https://clawhub.ai/skills/clawcierge) — restaurant booking
-- 💸 [ClawBack](https://clawhub.ai/skills/clawback) — group expense splitting
+- 🎉 [ClawEvents](https://github.com/yhyatt/clawevents) — event discovery for your destination
+- 🍽️ [ClawCierge](https://github.com/yhyatt/clawcierge) — restaurant booking
+- 💸 [ClawBack](https://github.com/yhyatt/clawback) — group expense splitting
 
 ---
 
