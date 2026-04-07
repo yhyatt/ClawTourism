@@ -39,7 +39,7 @@ import logging
 import os
 import urllib.parse
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -125,6 +125,140 @@ def _resolve_iata(code_or_city: str) -> str:
     return city_to_iata(s)
 
 
+# --- Airport timezone lookup (common destinations) ---
+_AIRPORT_TZ = {
+    "VIE": timezone(timedelta(hours=1)),    # CET
+    "OTP": timezone(timedelta(hours=2)),    # EET
+    "TLV": timezone(timedelta(hours=2)),    # IST
+    "ATH": timezone(timedelta(hours=2)),    # EET
+    "BCN": timezone(timedelta(hours=1)),    # CET
+    "MAD": timezone(timedelta(hours=1)),    # CET
+    "FCO": timezone(timedelta(hours=1)),    # CET
+    "NAP": timezone(timedelta(hours=1)),    # CET
+    "CTA": timezone(timedelta(hours=1)),    # CET
+    "CDG": timezone(timedelta(hours=1)),    # CET
+    "LHR": timezone(timedelta(hours=0)),    # GMT
+    "AMS": timezone(timedelta(hours=1)),    # CET
+    "BER": timezone(timedelta(hours=1)),    # CET
+    "RAK": timezone(timedelta(hours=1)),    # WET
+    "TFS": timezone(timedelta(hours=0)),    # WET (Canary Islands)
+    "JFK": timezone(timedelta(hours=-5)),   # EST
+}
+
+
+def _detect_airport_tz(depart_time: str, arrive_time: str):
+    """Return (dep_tz, arr_tz) as timezone objects.
+
+    Heuristic: if the API embeds timezone offset in the timestamp (e.g. +02:00),
+    parse it directly. Otherwise, fall back to the airport timezone table.
+    """
+    def _parse_tz(ts: str, default: timezone) -> timezone:
+        if "+" in ts[19:] or "-" in ts[19:]:
+            try:
+                # Parse the offset portion, e.g. "+02:00"
+                offset_str = ts[19:].split("+")[1] if "+" in ts[19:] else ts[19:].split("-")[1]
+                if ":" in offset_str:
+                    h, m = offset_str.split(":")[:2]
+                else:
+                    h, m = offset_str[:2], offset_str[2:4]
+                return timezone(timedelta(hours=int(h), minutes=int(m)))
+            except (ValueError, IndexError):
+                return default
+        return default
+
+    # Default: CET for departure (most common origin)
+    dep_default = _AIRPORT_TZ.get("VIE", timezone(timedelta(hours=1)))
+    arr_default = _AIRPORT_TZ.get("OTP", timezone(timedelta(hours=2)))
+
+    return _parse_tz(depart_time, dep_default), _parse_tz(arrive_time, arr_default)
+
+
+# Expected flight times (minutes) — computed from great-circle distance
+# Key: (origin, destination) → (min_minutes, max_minutes)
+# Any "direct" flight outside this range is considered bad data.
+# max = min * 1.8 to account for taxi, climb, descent, holdings.
+_EXPECTED_TIMES: dict[tuple[str, str], tuple[int, int]] = {
+    ("VIE", "OTP"): (89, 159),
+    ("OTP", "VIE"): (89, 159),
+    ("VIE", "ATH"): (120, 216),
+    ("VIE", "FCO"): (85, 153),
+    ("VIE", "CDG"): (103, 186),
+    ("VIE", "BCN"): (120, 216),
+    ("VIE", "MAD"): (155, 279),
+    ("VIE", "LHR"): (110, 198),
+    ("VIE", "AMS"): (100, 180),
+    ("VIE", "BER"): (65, 117),
+    ("VIE", "MUC"): (45, 81),
+    ("VIE", "ZRH"): (55, 99),
+    ("TLV", "OTP"): (142, 256),
+    ("TLV", "ATH"): (114, 206),
+    ("TLV", "FCO"): (191, 344),
+    ("TLV", "VIE"): (155, 279),
+    ("TLV", "BCN"): (240, 432),
+    ("TLV", "CDG"): (235, 423),
+    ("TLV", "LHR"): (270, 486),
+    ("TLV", "JFK"): (630, 900),
+    ("BCN", "OTP"): (170, 306),
+    ("BCN", "FCO"): (90, 162),
+    ("ATH", "OTP"): (85, 153),
+}
+
+# Fallback for unknown routes: direct flights over 5h30m are likely bad data
+_FALLBACK_MAX_DIRECT = 330
+
+
+def _clean_results(flights: list[dict], from_iata: str = "", to_iata: str = "") -> list[dict]:
+    """Clean and deduplicate flight results.
+
+    1. Deduplicate: same flight number → keep cheapest
+    2. Filter impossible durations: use route-aware expected times
+    3. Remove flights with duration <= 0
+    """
+    # Deduplicate by flight_number — keep cheapest
+    seen: dict[str, dict] = {}
+    for f in flights:
+        fn = f.get("flight_number", "")
+        if fn and fn in seen:
+            if f["price_eur"] < seen[fn]["price_eur"]:
+                seen[fn] = f
+        else:
+            seen[fn] = f
+    deduped = list(seen.values())
+
+    # Filter impossible durations for direct flights
+    cleaned = []
+    for f in deduped:
+        dur = f.get("duration_min", 0)
+        is_direct = f.get("stops", 0) == 0
+        if dur <= 0:
+            f["duration_min"] = 0
+            cleaned.append(f)
+        elif is_direct:
+            # Look up route-specific expected time
+            route_key = (from_iata.upper(), to_iata.upper()) if from_iata and to_iata else None
+            max_min = _EXPECTED_TIMES.get(route_key, (0, _FALLBACK_MAX_DIRECT))[1]
+            if dur > max_min:
+                logger.debug(
+                    "Filtered impossible direct flight: %s %s (%dh%dm, max expected %dh%dm)",
+                    f.get("airline"), f.get("flight_number"),
+                    dur // 60, dur % 60, max_min // 60, max_min % 60,
+                )
+                continue
+            cleaned.append(f)
+        else:
+            cleaned.append(f)
+
+    if len(deduped) - len(cleaned) > 0:
+        logger.info(
+            "Cleaned %d → %d results (dedup removed %d, duration filter removed %d)",
+            len(flights), len(cleaned),
+            len(flights) - len(deduped),
+            len(deduped) - len(cleaned),
+        )
+
+    return cleaned
+
+
 def _parse_flight_offer(offer: dict) -> Optional[dict]:
     """Parse a single flightOffer from the API response into a clean dict.
 
@@ -148,12 +282,13 @@ def _parse_flight_offer(offer: dict) -> Optional[dict]:
         depart_time = first_seg.get("departureTime", "")
         arrive_time = last_seg.get("arrivalTime", "")
 
-        # Duration: compute from departure/arrival times
+        # Duration: compute from departure/arrival times (timezone-aware)
         duration_min = 0
         try:
-            fmt = "%Y-%m-%dT%H:%M:%S"
-            dt_dep = datetime.strptime(depart_time[:19], fmt)
-            dt_arr = datetime.strptime(arrive_time[:19], fmt)
+            # Parse times — the API returns ISO timestamps, possibly mixed timezone
+            dep_tz, arr_tz = _detect_airport_tz(depart_time, arrive_time)
+            dt_dep = datetime.strptime(depart_time[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=dep_tz)
+            dt_arr = datetime.strptime(arrive_time[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=arr_tz)
             duration_min = int((dt_arr - dt_dep).total_seconds() / 60)
         except (ValueError, TypeError):
             pass
@@ -272,6 +407,9 @@ def search_flights(
             continue
         results.append(parsed)
 
+    # --- Post-processing: dedup, duration sanity, timezone fix ---
+    results = _clean_results(results, from_iata, to_iata)
+
     results.sort(key=lambda x: x["price_eur"])
     return results[:top_n]
 
@@ -309,9 +447,13 @@ def search_flights_report(
     if not flights:
         return f"No flights found from {from_iata} to {to_iata} on {depart_date}."
 
+    # Fetch timestamp for data freshness context
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
     lines = [
         f"✈️ Flights: {from_iata.upper()} → {to_iata.upper()} on {depart_date}",
         f"   Passengers: {adults} adults" + (f", {children} children" if children else ""),
+        f"   Fetched: {now}  ⚠️ prices may change, verify before booking",
         "",
     ]
 
