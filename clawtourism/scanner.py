@@ -1,4 +1,4 @@
-"""EmailScanner — scans Gmail for travel emails via gog CLI.
+"""EmailScanner — scans Gmail for travel emails via googleworkspace CLI (gws).
 
 Design: Label-first scanning. Only reads from label:Trips.
 No broad Gmail search needed — the user manually labels travel-related emails.
@@ -6,6 +6,7 @@ No broad Gmail search needed — the user manually labels travel-related emails.
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -13,15 +14,13 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from typing import Any
-
     from clawtourism.models import SourceEmail
 
 
-# The magic label — we ONLY scan this
+GWS_BIN = "/usr/local/bin/googleworkspace"
 TRAVEL_LABEL = "Trips"
 
 
@@ -75,7 +74,7 @@ class UnassignedEmail:
 
 
 class EmailScanner:
-    """Scans Gmail for travel-related emails using gog CLI.
+    """Scans Gmail for travel-related emails using googleworkspace CLI (gws).
 
     Design: Label-first scanning.
     - ONLY reads from label:Trips
@@ -150,34 +149,20 @@ class EmailScanner:
     def __init__(
         self,
         account: str = "hyatt.yonatan@gmail.com",
-        keyring_password: str | None = None,
     ) -> None:
         self.account = account
-        self.keyring_password = keyring_password or os.environ.get(
-            "GOG_KEYRING_PASSWORD", "kai-gog-keyring"
-        )
 
-    def _run_gog(self, args: list[str]) -> str:
-        """Run gog CLI command and return output."""
-        env = os.environ.copy()
-        env["GOG_KEYRING_PASSWORD"] = self.keyring_password
-
-        cmd = ["gog"] + args + ["--account", self.account]
+    def _run_gws(self, args: list[str]) -> str:
+        """Run gws CLI command and return output."""
+        cmd = [GWS_BIN] + args
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            env=env,
         )
         if result.returncode != 0:
-            raise RuntimeError(f"gog command failed: {result.stderr}")
+            raise RuntimeError(f"gws command failed: {result.stderr}")
         return result.stdout
-
-    def _run_gog_json(self, args: list[str]) -> dict[str, Any]:
-        """Run gog CLI command and parse JSON output."""
-        output = self._run_gog(args + ["--json"])
-        result: dict[str, Any] = json.loads(output)
-        return result
 
     def search_trips_label(self, max_results: int = 100, days: int = 365) -> list[EmailMessage]:
         """Search for messages with the Trips label.
@@ -189,44 +174,78 @@ class EmailScanner:
 
     def _search_messages(self, query: str, max_results: int = 50) -> list[EmailMessage]:
         """Search for messages matching query."""
-        output = self._run_gog([
-            "gmail", "messages", "search",
-            query,
-            "--max", str(max_results),
-            "--json",
+        output = self._run_gws([
+            "gmail", "users", "messages", "list",
+            "--params", json.dumps({
+                "userId": self.account,
+                "q": query,
+                "maxResults": max_results,
+            }),
+            "--format", "json",
         ])
 
         data = json.loads(output)
         messages = []
         for msg in data.get("messages", []):
-            try:
-                dt = datetime.strptime(msg["date"], "%Y-%m-%d %H:%M")
-            except (ValueError, KeyError):
-                dt = datetime.now()
-
             messages.append(EmailMessage(
                 id=msg["id"],
-                thread_id=msg["threadId"],
-                date=dt,
-                sender=msg.get("from", ""),
-                subject=msg.get("subject", ""),
-                labels=msg.get("labels", []),
+                thread_id=msg.get("threadId", ""),
+                date=datetime.now(),
+                sender="",
+                subject="",
+                labels=[],
             ))
         return messages
 
     def get_thread(self, thread_id: str) -> str:
-        """Get full thread content as text."""
-        return self._run_gog([
-            "gmail", "thread", "show",
-            thread_id,
+        """Get full thread content as JSON string."""
+        output = self._run_gws([
+            "gmail", "users", "threads", "get",
+            "--params", json.dumps({
+                "userId": self.account,
+                "id": thread_id,
+                "format": "full",
+            }),
+            "--format", "json",
         ])
+        return output
 
     def get_thread_json(self, thread_id: str) -> dict[str, Any]:
-        """Get full thread content as JSON (includes attachment metadata)."""
-        return self._run_gog_json([
-            "gmail", "thread", "show",
-            thread_id,
+        """Get full thread content as parsed dict."""
+        return json.loads(self.get_thread(thread_id))
+
+    def get_message(self, message_id: str) -> dict[str, Any]:
+        """Get a single message with headers."""
+        output = self._run_gws([
+            "gmail", "users", "messages", "get",
+            "--params", json.dumps({
+                "userId": self.account,
+                "id": message_id,
+                "format": "metadata",
+                "metadataHeaders": ["From", "Subject", "Date"],
+            }),
+            "--format", "json",
         ])
+        return json.loads(output)
+
+    def enrich_message(self, msg: EmailMessage) -> EmailMessage:
+        """Enrich an EmailMessage with sender, subject, date from Gmail API."""
+        try:
+            detail = self.get_message(msg.id)
+            headers = {h["name"]: h["value"] for h in detail.get("payload", {}).get("headers", [])}
+            msg.sender = headers.get("From", "")
+            msg.subject = headers.get("Subject", "")
+            date_str = headers.get("Date", "")
+            if date_str:
+                try:
+                    from email.utils import parsedate_to_datetime
+                    msg.date = parsedate_to_datetime(date_str)
+                except Exception:
+                    pass
+            msg.labels = detail.get("labelIds", [])
+        except Exception:
+            pass
+        return msg
 
     def is_known_travel_sender(self, sender: str) -> bool:
         """Check if sender is from a known travel domain.

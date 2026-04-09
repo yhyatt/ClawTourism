@@ -165,7 +165,7 @@ ct checklists    # sets up D-14/7/3/1 briefing crons
 | `~/.openclaw/google-places-key.txt` | [Google Cloud Console](https://console.cloud.google.com) | `places` module (5K req/month free) |
 | `RAPIDAPI_KEY` (env/keyring) | [RapidAPI](https://rapidapi.com) | `accommodation`, `flights` (Booking.com) |
 | Apify token (keyring) | [Apify Console](https://apify.com) | `airbnb` module |
-| `GOG_KEYRING_PASSWORD` | [gog skill](https://github.com/yhyatt/gclaw) | Gmail scanning (`scan` command) |
+| `file-based auth` | [gog skill](https://github.com/yhyatt/gclaw) | Gmail scanning (`scan` command) |
 
 **No key needed:** `currency`, `destination`, `weather`, `visa_check`, `flight-status`, `flight-monitor`
 
