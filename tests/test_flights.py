@@ -140,12 +140,12 @@ class TestSearchFlights:
             assert required_fields.issubset(r.keys()), f"Missing fields: {required_fields - r.keys()}"
 
     def test_duration_calculation(self):
-        """Duration in minutes is correctly computed from dep/arr times."""
+        """Duration in minutes is correctly computed from dep/arr times (DST-aware)."""
         with _mock_key(), _mock_urlopen(MOCK_API_RESPONSE):
             results = search_flights("OTP", "VIE", "2026-04-03")
-        # Wizz Air: 06:00 -> 07:45 = 105 min
+        # Wizz Air: 06:00 EEST (Bucharest) -> 07:45 CEST (Vienna) = 165 min
         wizz = [r for r in results if r["airline"] == "Wizz Air"][0]
-        assert wizz["duration_min"] == 105
+        assert wizz["duration_min"] == 165
 
     def test_network_error_returns_empty(self):
         """Network errors return empty list, don't crash."""

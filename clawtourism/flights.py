@@ -125,37 +125,39 @@ def _resolve_iata(code_or_city: str) -> str:
     return city_to_iata(s)
 
 
-# --- Airport timezone lookup (common destinations) ---
+# --- Airport timezone lookup (common destinations, DST-aware) ---
+from zoneinfo import ZoneInfo
+
 _AIRPORT_TZ = {
-    "VIE": timezone(timedelta(hours=1)),    # CET
-    "OTP": timezone(timedelta(hours=2)),    # EET
-    "TLV": timezone(timedelta(hours=2)),    # IST
-    "ATH": timezone(timedelta(hours=2)),    # EET
-    "BCN": timezone(timedelta(hours=1)),    # CET
-    "MAD": timezone(timedelta(hours=1)),    # CET
-    "FCO": timezone(timedelta(hours=1)),    # CET
-    "NAP": timezone(timedelta(hours=1)),    # CET
-    "CTA": timezone(timedelta(hours=1)),    # CET
-    "CDG": timezone(timedelta(hours=1)),    # CET
-    "LHR": timezone(timedelta(hours=0)),    # GMT
-    "AMS": timezone(timedelta(hours=1)),    # CET
-    "BER": timezone(timedelta(hours=1)),    # CET
-    "RAK": timezone(timedelta(hours=1)),    # WET
-    "TFS": timezone(timedelta(hours=0)),    # WET (Canary Islands)
-    "JFK": timezone(timedelta(hours=-5)),   # EST
+    "VIE": ZoneInfo("Europe/Vienna"),
+    "OTP": ZoneInfo("Europe/Bucharest"),
+    "TLV": ZoneInfo("Asia/Jerusalem"),
+    "ATH": ZoneInfo("Europe/Athens"),
+    "BCN": ZoneInfo("Europe/Madrid"),
+    "MAD": ZoneInfo("Europe/Madrid"),
+    "FCO": ZoneInfo("Europe/Rome"),
+    "NAP": ZoneInfo("Europe/Rome"),
+    "CTA": ZoneInfo("Europe/Rome"),
+    "CDG": ZoneInfo("Europe/Paris"),
+    "LHR": ZoneInfo("Europe/London"),
+    "AMS": ZoneInfo("Europe/Amsterdam"),
+    "BER": ZoneInfo("Europe/Berlin"),
+    "RAK": ZoneInfo("Africa/Casablanca"),
+    "TFS": ZoneInfo("Atlantic/Canary"),
+    "JFK": ZoneInfo("America/New_York"),
 }
 
 
-def _detect_airport_tz(depart_time: str, arrive_time: str):
+def _detect_airport_tz(depart_time: str, arrive_time: str,
+                       origin_iata: str = "", dest_iata: str = ""):
     """Return (dep_tz, arr_tz) as timezone objects.
 
     Heuristic: if the API embeds timezone offset in the timestamp (e.g. +02:00),
     parse it directly. Otherwise, fall back to the airport timezone table.
     """
-    def _parse_tz(ts: str, default: timezone) -> timezone:
+    def _parse_tz(ts: str, default) -> timezone:
         if "+" in ts[19:] or "-" in ts[19:]:
             try:
-                # Parse the offset portion, e.g. "+02:00"
                 offset_str = ts[19:].split("+")[1] if "+" in ts[19:] else ts[19:].split("-")[1]
                 if ":" in offset_str:
                     h, m = offset_str.split(":")[:2]
@@ -166,9 +168,9 @@ def _detect_airport_tz(depart_time: str, arrive_time: str):
                 return default
         return default
 
-    # Default: CET for departure (most common origin)
-    dep_default = _AIRPORT_TZ.get("VIE", timezone(timedelta(hours=1)))
-    arr_default = _AIRPORT_TZ.get("OTP", timezone(timedelta(hours=2)))
+    _UTC = ZoneInfo("UTC")
+    dep_default = _AIRPORT_TZ.get(origin_iata, _UTC)
+    arr_default = _AIRPORT_TZ.get(dest_iata, _UTC)
 
     return _parse_tz(depart_time, dep_default), _parse_tz(arrive_time, arr_default)
 
@@ -178,8 +180,8 @@ def _detect_airport_tz(depart_time: str, arrive_time: str):
 # Any "direct" flight outside this range is considered bad data.
 # max = min * 1.8 to account for taxi, climb, descent, holdings.
 _EXPECTED_TIMES: dict[tuple[str, str], tuple[int, int]] = {
-    ("VIE", "OTP"): (89, 159),
-    ("OTP", "VIE"): (89, 159),
+    ("VIE", "OTP"): (85, 180),
+    ("OTP", "VIE"): (85, 180),
     ("VIE", "ATH"): (120, 216),
     ("VIE", "FCO"): (85, 153),
     ("VIE", "CDG"): (103, 186),
@@ -259,7 +261,7 @@ def _clean_results(flights: list[dict], from_iata: str = "", to_iata: str = "") 
     return cleaned
 
 
-def _parse_flight_offer(offer: dict) -> Optional[dict]:
+def _parse_flight_offer(offer: dict, origin_iata: str = "", dest_iata: str = "") -> Optional[dict]:
     """Parse a single flightOffer from the API response into a clean dict.
 
     Returns None if the offer cannot be parsed.
@@ -286,7 +288,7 @@ def _parse_flight_offer(offer: dict) -> Optional[dict]:
         duration_min = 0
         try:
             # Parse times — the API returns ISO timestamps, possibly mixed timezone
-            dep_tz, arr_tz = _detect_airport_tz(depart_time, arrive_time)
+            dep_tz, arr_tz = _detect_airport_tz(depart_time, arrive_time, origin_iata, dest_iata)
             dt_dep = datetime.strptime(depart_time[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=dep_tz)
             dt_arr = datetime.strptime(arrive_time[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=arr_tz)
             duration_min = int((dt_arr - dt_dep).total_seconds() / 60)
@@ -400,7 +402,7 @@ def search_flights(
     offers = body.get("data", {}).get("flightOffers", [])
     results = []
     for offer in offers:
-        parsed = _parse_flight_offer(offer)
+        parsed = _parse_flight_offer(offer, origin, dest)
         if parsed is None:
             continue
         if direct_only and parsed["segments_count"] != 1:
